@@ -6,11 +6,23 @@ $computerSystem = Get-CimInstance Win32_ComputerSystem
 $osInfo         = Get-CimInstance Win32_OperatingSystem
 $cpuInfo        = Get-CimInstance Win32_Processor | Select-Object -First 1
 $biosInfo       = Get-CimInstance Win32_Bios
-$diskInfo       = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
 $videoInfo      = Get-CimInstance Win32_VideoController | Select-Object -First 1
 
-$ramGB     = [math]::Round($computerSystem.TotalPhysicalMemory / 1GB)
-$storageGB = [math]::Round($diskInfo.Size / 1GB)
+# Get ALL local hard drives/partitions & calculate individual + total sizes
+$disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3"
+$diskList = @()
+$totalStorageGB = 0
+
+foreach ($disk in $disks) {
+    $sizeGB = [math]::Round($disk.Size / 1GB)
+    $diskList += "$($disk.DeviceID) $sizeGB GB"
+    $totalStorageGB += $sizeGB  # Sum up the total capacity
+}
+
+# Combine into one clean string with the grand total at the end
+$allStorage = ($diskList -join " | ") + " (Total: $totalStorageGB GB)"
+
+$ramGB = [math]::Round($computerSystem.TotalPhysicalMemory / 1GB)
 $resolution = if ($videoInfo.CurrentHorizontalResolution) {
     "$($videoInfo.CurrentHorizontalResolution)x$($videoInfo.CurrentVerticalResolution)"
 } else {
@@ -24,7 +36,7 @@ $data = [ordered]@{
     "OS"            = $osInfo.Caption
     "Processor"     = $cpuInfo.Name.Trim()
     "RAM"           = "$ramGB GB"
-    "Storage"       = "$storageGB GB (C:)"
+    "Storage"       = $allStorage
     "Layar"         = "$resolution ($($videoInfo.Name))"
     "Serial Number" = $biosInfo.SerialNumber
 }
@@ -67,6 +79,28 @@ foreach ($key in $data.Keys) {
 
     $y += 38
 }
+
+# 3. Add Control Buttons
+# Export Button
+$btnExport = New-Object System.Windows.Forms.Button
+$btnExport.Text = "Append to Excel CSV"
+$btnExport.Location = [System.Drawing.Point]::new(150, $y + 10)
+$btnExport.Size = [System.Drawing.Size]::new(160, 35)
+$btnExport.Font = $fontLabel
+$btnExport.BackColor = [System.Drawing.Color]::LightGreen
+$btnExport.FlatStyle = "Flat"
+$btnExport.Add_Click({
+    $saveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
+    $saveFileDialog.Filter = "CSV files (*.csv)|*.csv"
+    $saveFileDialog.FileName = "Stock_Opname.csv"
+    
+    if ($saveFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        $StockData = [PSCustomObject]$data
+        $StockData | Export-Csv -Path $saveFileDialog.FileName -NoTypeInformation -Append
+        [System.Windows.Forms.MessageBox]::Show("Successfully added to CSV tracker!", "Data Saved", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+    }
+})
+$form.Controls.Add($btnExport)
 
 # Close Button
 $btnClose = New-Object System.Windows.Forms.Button
