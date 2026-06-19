@@ -49,178 +49,125 @@ $data = [ordered]@{
     "Processor"     = $cpuInfo.Name.Trim()
     "RAM"           = "$ramGB GB"
     "Storage"       = $allStorage
-    "Layar"         = "$screenInches"
+    "Layar"         = "$resolution ($screenInches - $($videoInfo.Name))"
     "Serial Number" = $biosInfo.SerialNumber
 }
 
-# 2. Build the Raw TEXTSPLIT Formula String
-$excelFormula = '=TEXTSPLIT("{0}|{1}|{2}|{3}|{4}|{5}|{6}|{7}", "|")' -f $data."Computer Name", $data."Merk / Tipe", $data."OS", $data."Processor", $data."RAM", $data."Storage", $data."Layar", $data."Serial Number"
-
-# 3. Build the Mixed GUI (Specs on Top, Formula on Bottom)
+# 2. Build the Clean GUI Window
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Net.Http
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "System Info & Excel Formula Generator"
-$form.Size = [System.Drawing.Size]::new(850, 680)
+$form.Text = "System Info - Stock Opname Tool"
+$form.Size = [System.Drawing.Size]::new(520, 480)
 $form.StartPosition = "CenterScreen"
-$form.FormBorderStyle = "Sizable"
-$form.MaximizeBox = $true
-$form.MinimumSize = [System.Drawing.Size]::new(650, 550)
+$form.FormBorderStyle = "FixedDialog"
+$form.MaximizeBox = $false
 $form.BackColor = [System.Drawing.Color]::White
 
-# Track current text size scalers
-$script:currentSpecSize = 10
-$script:currentFormulaSize = 12
-
-# --- IMAGE LOGO ENGINE ---
-$logoBox = New-Object System.Windows.Forms.PictureBox
+# --- APPLICATION ICON ENGINE ---
+# Converts the logo image seamlessly into an active native window application icon
 try {
     $imageUrl = "https://github.com/vinoaryo25/vinoaryo25/blob/main/bin/logo-wk.png?raw=true"
     $httpClient = New-Object System.Net.Http.HttpClient
     $imageBytes = $httpClient.GetByteArrayAsync($imageUrl).GetAwaiter().GetResult()
     $ms = New-Object System.IO.MemoryStream($imageBytes, 0, $imageBytes.Length)
-    $logoBox.Image = [System.Drawing.Image]::FromStream($ms)
+    $bitmap = New-Object System.Drawing.Bitmap($ms)
+    $hIcon = $bitmap.GetHicon()
+    $form.Icon = [System.Drawing.Icon]::FromHandle($hIcon)
+    $bitmap.Dispose()
     $httpClient.Dispose()
 } catch {
-    # Fail silently if offline
+    # Fallback to standard OS styling if offline
 }
-$logoBox.Size = [System.Drawing.Size]::new(120, 120)
-$logoBox.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
-$logoBox.Anchor = [System.Windows.Forms.AnchorStyles]"Top, Right"
-$form.Controls.Add($logoBox)
 
-# --- TOP SECTION: LIVE SPECIFICATIONS ---
+# Styling Fonts
+$fontLabel = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$fontValue = New-Object System.Drawing.Font("Segoe UI", 9)
+
 $y = 20
-$specControls = @()
 
+# --- USER INPUT FIELD FOR NTFY TITLE ---
+$lblUser = New-Object System.Windows.Forms.Label
+$lblUser.Text = "User Name"
+$lblUser.Location = [System.Drawing.Point]::new(20, $y)
+$lblUser.Size = [System.Drawing.Size]::new(120, 23)
+$lblUser.Font = $fontLabel
+$lblUser.ForeColor = [System.Drawing.Color]::Navy
+$lblUser.BackColor = [System.Drawing.Color]::Transparent
+$form.Controls.Add($lblUser)
+
+$txtUser = New-Object System.Windows.Forms.TextBox
+$txtUser.Text = "" # Left blank for manual inventory user assignment
+$txtUser.Location = [System.Drawing.Point]::new(150, $y - 3)
+$txtUser.Size = [System.Drawing.Size]::new(330, 23)
+$txtUser.Font = $fontValue
+$txtUser.BackColor = [System.Drawing.Color]::LightYellow  # Distinct visual accent color
+$form.Controls.Add($txtUser)
+
+$y += 38
+
+# Generate Labels and Read-only Textboxes dynamically for specs
 foreach ($key in $data.Keys) {
     # Label
     $lbl = New-Object System.Windows.Forms.Label
     $lbl.Text = $key
     $lbl.Location = [System.Drawing.Point]::new(20, $y)
-    $lbl.Size = [System.Drawing.Size]::new(150, 28)
-    $lbl.Font = New-Object System.Drawing.Font("Segoe UI", $script:currentSpecSize, [System.Drawing.FontStyle]::Bold)
+    $lbl.Size = [System.Drawing.Size]::new(120, 23)
+    $lbl.Font = $fontLabel
+    $lbl.ForeColor = [System.Drawing.Color]::DarkSlateGray
     $lbl.BackColor = [System.Drawing.Color]::Transparent
     $form.Controls.Add($lbl)
-    $specControls += $lbl
 
-    # Value TextBox
-    $txtSpec = New-Object System.Windows.Forms.TextBox
-    $txtSpec.Text = $data[$key]
-    $txtSpec.Location = [System.Drawing.Point]::new(180, $y - 3)
-    $txtSpec.Font = New-Object System.Drawing.Font("Segoe UI", $script:currentSpecSize)
-    $txtSpec.ReadOnly = $true
-    $txtSpec.BackColor = [System.Drawing.Color]::FromArgb(248, 249, 250)
-    $txtSpec.Size = [System.Drawing.Size]::new(($form.ClientSize.Width - 330), 28)
-    $txtSpec.Anchor = [System.Windows.Forms.AnchorStyles]"Top, Left, Right"
-    $form.Controls.Add($txtSpec)
-    $specControls += $txtSpec
+    # TextBox (Full width now since the interior graphic is removed)
+    $txt = New-Object System.Windows.Forms.TextBox
+    $txt.Text = $data[$key]
+    $txt.Location = [System.Drawing.Point]::new(150, $y - 3)
+    $txt.Size = [System.Drawing.Size]::new(330, 23)
+    $txt.Font = $fontValue
+    $txt.ReadOnly = $true
+    $txt.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 245)
+    $form.Controls.Add($txt)
 
-    $y += 42
+    $y += 38
 }
 
-# Divider Label
-$lblDivider = New-Object System.Windows.Forms.Label
-$lblDivider.Text = "Excel Formula (Auto-spreads across Columns A-H)"
-$lblDivider.Location = [System.Drawing.Point]::new(20, $y + 15)
-$lblDivider.Size = [System.Drawing.Size]::new(500, 25)
-$lblDivider.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
-$lblDivider.ForeColor = [System.Drawing.Color]::DarkGreen
-$lblDivider.BackColor = [System.Drawing.Color]::Transparent
-$form.Controls.Add($lblDivider)
+# Submit & Close Button
+$btnSubmit = New-Object System.Windows.Forms.Button
+$btnSubmit.Text = "Submit & Close"
+$btnSubmit.Location = [System.Drawing.Point]::new(330, $y + 10)
+$btnSubmit.Size = [System.Drawing.Size]::new(150, 35)
+$btnSubmit.Font = $fontLabel
+$btnSubmit.BackColor = [System.Drawing.Color]::LightGreen
+$btnSubmit.FlatStyle = "Flat"
 
-# --- BOTTOM SECTION: EXCEL TEXTSPLIT FORMULA ---
-$txtFormula = New-Object System.Windows.Forms.TextBox
-$txtFormula.Text = $excelFormula
-$txtFormula.Location = [System.Drawing.Point]::new(20, $y + 45)
-$txtFormula.Size = [System.Drawing.Size]::new(($form.ClientSize.Width - 50), 120) 
-$txtFormula.Font = New-Object System.Drawing.Font("Consolas", $script:currentFormulaSize, [System.Drawing.FontStyle]::Bold)
-$txtFormula.Multiline = $true
-$txtFormula.WordWrap = $true
-$txtFormula.ReadOnly = $true
-$txtFormula.ScrollBars = "Vertical"
-$txtFormula.BackColor = [System.Drawing.Color]::FromArgb(248, 249, 250)
-$txtFormula.Anchor = [System.Windows.Forms.AnchorStyles]"Top, Bottom, Left, Right"
-$form.Controls.Add($txtFormula)
-
-# Size Functions
-function Update-FormulaFontSize ($delta) {
-    $script:currentFormulaSize += $delta
-    if ($script:currentFormulaSize -lt 6) { $script:currentFormulaSize = 6 }
-    if ($script:currentFormulaSize -gt 48) { $script:currentFormulaSize = 48 }
-    $txtFormula.Font = New-Object System.Drawing.Font("Consolas", $script:currentFormulaSize, [System.Drawing.FontStyle]::Bold)
-}
-
-function Update-SpecFontSize ($delta) {
-    $script:currentSpecSize += $delta
-    if ($script:currentSpecSize -lt 6) { $script:currentSpecSize = 6 }
-    foreach ($control in $specControls) {
-        $style = if ($control -is [System.Windows.Forms.Label]) { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }
-        $control.Font = New-Object System.Drawing.Font("Segoe UI", $script:currentSpecSize, $style)
+# Action Trigger: Bundles and pushes string row upon confirmation click
+$btnSubmit.Add_Click({ 
+    $finalUser = if ([string]::IsNullOrWhiteSpace($txtUser.Text)) { "Unknown User" } else { $txtUser.Text.Trim() }
+    
+    # Pack semicolon matrix payload
+    $semicolonRow = ($data.Values -join ";")
+    $ntfyUrl = "https://ntfy.sh/sop"
+    $headers = @{
+        "Title"    = "Stock Opname: $finalUser ($($data.'Computer Name'))"
+        "Priority" = "default"
+        "Tags"     = "computer,clipboard"
     }
-}
 
-# Scrollwheel Engine (Ctrl + Mouse Wheel over Formula Field)
-$txtFormula.Add_MouseWheel({
-    param($sender, $e)
-    if ([System.Windows.Forms.Control]::ModifierKeys -eq [System.Windows.Forms.Keys]::Control) {
-        if ($e.Delta -gt 0) { Update-FormulaFontSize(1.5) } else { Update-FormulaFontSize(-1.5) }
+    try {
+        Invoke-RestMethod -Method Post -Uri $ntfyUrl -Headers $headers -Body $semicolonRow -ContentType "text/plain; charset=utf-8" | Out-Null
+    } catch {
+        # Silent exception catch to close cleanly even if network drops
     }
+
+    $form.Close() 
 })
+$form.Controls.Add($btnSubmit)
 
-# --- MANUAL ACCESSIBILITY BUTTONS ---
-$btnSizeDown = New-Object System.Windows.Forms.Button
-$btnSizeDown.Text = "A- Smaller Text"
-$btnSizeDown.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$btnSizeDown.Size = [System.Drawing.Size]::new(120, 35)
-$btnSizeDown.Anchor = [System.Windows.Forms.AnchorStyles]"Bottom, Left"
-$btnSizeDown.Add_Click({ Update-FormulaFontSize(-1.5); Update-SpecFontSize(-1.5) })
-$form.Controls.Add($btnSizeDown)
+# --- KEYBOARD ENTER SUBMIT FIX ---
+# This line tells the form: "If the user hits Enter anywhere, click the submit button"
+$form.AcceptButton = $btnSubmit
 
-$btnSizeUp = New-Object System.Windows.Forms.Button
-$btnSizeUp.Text = "A+ Larger Text"
-$btnSizeUp.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$btnSizeUp.Size = [System.Drawing.Size]::new(120, 35)
-$btnSizeUp.Anchor = [System.Windows.Forms.AnchorStyles]"Bottom, Left"
-$btnSizeUp.Add_Click({ Update-FormulaFontSize(1.5); Update-SpecFontSize(1.5) })
-$form.Controls.Add($btnSizeUp)
-
-$btnCopy = New-Object System.Windows.Forms.Button
-$btnCopy.Text = "Copy Formula"
-$btnCopy.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$btnCopy.Size = [System.Drawing.Size]::new(130, 35)
-$btnCopy.Anchor = [System.Windows.Forms.AnchorStyles]"Bottom, Right"
-$btnCopy.Add_Click({ 
-    [System.Windows.Forms.Clipboard]::SetText($txtFormula.Text)
-    $btnCopy.Text = "Copied!"
-    Start-Sleep -Seconds 1
-    $btnCopy.Text = "Copy Formula"
-})
-$form.Controls.Add($btnCopy)
-
-$btnCancel = New-Object System.Windows.Forms.Button
-$btnCancel.Text = "Close"
-$btnCancel.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$btnCancel.Size = [System.Drawing.Size]::new(100, 35)
-$btnCancel.Anchor = [System.Windows.Forms.AnchorStyles]"Bottom, Right"
-$btnCancel.Add_Click({ $form.Close() })
-$form.Controls.Add($btnCancel)
-
-# Window Resize Coordinator
-$form.Add_Resize({
-    $btnCancel.Location = [System.Drawing.Point]::new(($form.ClientSize.Width - 120), ($form.ClientSize.Height - 50))
-    $btnCopy.Location = [System.Drawing.Point]::new(($form.ClientSize.Width - 260), ($form.ClientSize.Height - 50))
-    $btnSizeDown.Location = [System.Drawing.Point]::new(20, ($form.ClientSize.Height - 50))
-    $btnSizeUp.Location = [System.Drawing.Point]::new(150, ($form.ClientSize.Height - 50))
-    $logoBox.Location = [System.Drawing.Point]::new(($form.ClientSize.Width - 140), 20)
-})
-
-# Launch fully maximized
-$form.WindowState = [System.Windows.Forms.FormWindowState]::Maximized
-
-# Highlight formula instantly
-$form.Add_Shown({ $txtFormula.SelectAll(); $txtFormula.Focus() })
-
+# Display the window
 $form.ShowDialog() | Out-Null
