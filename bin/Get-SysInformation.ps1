@@ -1,8 +1,3 @@
-# Self-Bypass Execution Policy for the current process
-if ((Get-ExecutionPolicy) -ne 'Bypass') {
-    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-}
-
 # 1. Gather System Information
 $computerSystem = Get-CimInstance Win32_ComputerSystem
 $osInfo         = Get-CimInstance Win32_OperatingSystem
